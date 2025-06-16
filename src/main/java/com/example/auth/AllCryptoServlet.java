@@ -34,7 +34,7 @@ public void init() {
         while (true) {
             try {
                 fetchData();
-                Thread.sleep(6000);
+                Thread.sleep(2000);
             } catch (Exception e) {
                 System.out.println("Error polling all crypto: " + e.getMessage());
             }
