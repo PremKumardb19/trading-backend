@@ -1,0 +1,13 @@
+com\mycompany\trading\backend\JakartaRestConfiguration.class
+com\example\auth\CandleServlet.class
+com\example\auth\TradingServlet.class
+com\example\auth\AllCryptoServlet.class
+com\example\auth\RegisterServlet.class
+com\example\auth\FetchServlet.class
+com\mycompany\trading\backend\resources\JakartaEE11Resource.class
+com\example\auth\CORSFilter.class
+com\example\auth\FundingServlet.class
+com\example\auth\BalanceServlet.class
+com\example\auth\DBConnection.class
+com\example\auth\LoginServlet.class
+com\example\auth\HoldingServlet.class
