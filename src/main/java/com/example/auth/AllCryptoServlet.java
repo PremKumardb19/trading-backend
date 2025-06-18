@@ -44,7 +44,7 @@ public void init() {
 
 private void fetchData() {
     try {
-        URL url = new URL("https://rest.coincap.io/v3/assets?apiKey=5add7d57084ad4de17c6233ec159559c9d4f7c2aab78238faf781144f21499bf");
+        URL url = new URL("https://rest.coincap.io/v3/assets?apiKey=73b51c5a5eb73a6c09e7cba842e0900e03606cc782347fb0cd843a2d82baeebb");
         HttpURLConnection con = (HttpURLConnection) url.openConnection();
         con.setRequestMethod("GET");
 
