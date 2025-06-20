@@ -10,16 +10,25 @@ import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
+
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+
 import org.json.JSONArray;
+
+import com.auth0.jwt.JWT;
+import com.auth0.jwt.algorithms.Algorithm;
+import com.auth0.jwt.exceptions.JWTVerificationException;
+import com.auth0.jwt.interfaces.DecodedJWT;
+import com.auth0.jwt.interfaces.JWTVerifier;
 
 @WebServlet("/candles")
 public class CandleServlet extends HttpServlet {
 
+    private static final String SECRET = "pk1908seckeyret007";
     private String response = "";
     private String baseId = "bitcoin";
     private String quoteId = "tether";
@@ -46,7 +55,6 @@ public class CandleServlet extends HttpServlet {
 
     @Override
     public void init() {
-       
         binanceSymbol = convertToBinanceSymbol(baseId, quoteId);
         try {
             fetchData();
@@ -61,7 +69,7 @@ public class CandleServlet extends HttpServlet {
             while (true) {
                 try {
                     fetchData();
-                    Thread.sleep(2000); 
+                    Thread.sleep(2000);
                 } catch (Exception e) {
                     System.out.println("Error polling Binance data: " + e.getMessage());
                 }
@@ -71,6 +79,7 @@ public class CandleServlet extends HttpServlet {
 
     public void fetchData() throws IOException {
         binanceSymbol = convertToBinanceSymbol(baseId, quoteId);
+        System.out.println("at fetchData "+ baseId+" quoteId"+quoteId);
         String apiUrl = "https://api.binance.com/api/v3/klines?symbol=" + binanceSymbol + "&interval=1m";
 
         HttpURLConnection con = (HttpURLConnection) new URL(apiUrl).openConnection();
@@ -82,7 +91,7 @@ public class CandleServlet extends HttpServlet {
                 response = in.lines().collect(Collectors.joining());
             }
         } else {
-            response = "[]"; 
+            response = "[]";
         }
 
         con.disconnect();
@@ -90,9 +99,30 @@ public class CandleServlet extends HttpServlet {
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse res) throws IOException {
-        System.out.println("GET request received at /candles");
+        res.setContentType("application/json");
+        res.setHeader("Access-Control-Allow-Origin", "*");
 
-       
+        
+        String authHeader = req.getHeader("Authorization");
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            res.getWriter().print("{\"error\":\"Missing or invalid token\"}");
+            return;
+        }
+
+        String token = authHeader.substring("Bearer ".length());
+
+        try {
+            Algorithm algorithm = Algorithm.HMAC256(SECRET);
+            JWTVerifier verifier = JWT.require(algorithm).build();
+            DecodedJWT jwt = verifier.verify(token);
+        } catch (JWTVerificationException e) {
+            res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            res.getWriter().print("{\"error\":\"Invalid token\"}");
+            return;
+        }
+
+        
         String newBase = req.getParameter("baseId");
         String newQuote = req.getParameter("quoteId");
 
@@ -102,10 +132,7 @@ public class CandleServlet extends HttpServlet {
             fetchData();
         }
 
-        res.setContentType("application/json");
-        res.setHeader("Access-Control-Allow-Origin", "*");
-
-        res.getWriter().print(new JSONArray(response).toString());
+        res.getWriter().print(new JSONArray(response));
     }
 
     private String convertToBinanceSymbol(String baseId, String quoteId) {

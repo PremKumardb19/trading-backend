@@ -6,12 +6,39 @@ import jakarta.servlet.annotation.*;
 import java.io.*;
 import java.sql.*;
 import org.json.JSONObject;
+import com.auth0.jwt.JWT;
+import com.auth0.jwt.algorithms.Algorithm;
+import com.auth0.jwt.exceptions.JWTVerificationException;
+import com.auth0.jwt.interfaces.DecodedJWT;
+import com.auth0.jwt.interfaces.JWTVerifier;
 
 @WebServlet("/trade")
 public class TradingServlet extends HttpServlet {
+    private static final String SECRET = "pk1908seckeyret007";
+
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
         response.setContentType("application/json");
         PrintWriter out = response.getWriter();
+
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            out.println("{\"status\":\"fail\", \"message\":\"Missing or invalid token\"}");
+            return;
+        }
+
+        String token = authHeader.substring("Bearer ".length());
+        String email;
+        try {
+            Algorithm algorithm = Algorithm.HMAC256(SECRET);
+            JWTVerifier verifier = JWT.require(algorithm).build();
+            DecodedJWT jwt = verifier.verify(token);
+            email = jwt.getClaim("email").asString(); 
+        } catch (JWTVerificationException e) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            out.println("{\"status\":\"fail\", \"message\":\"Invalid token\"}");
+            return;
+        }
 
         try {
             StringBuilder sb = new StringBuilder();
@@ -22,11 +49,10 @@ public class TradingServlet extends HttpServlet {
             }
             JSONObject json = new JSONObject(sb.toString());
 
-            String email = json.getString("email");
             String cryptoId = json.getString("cryptoId");
             String cryptoName = json.getString("cryptoName");
             String type = json.getString("type");
-            double amount = json.getDouble("amount"); // USD if buy, crypto if sell
+            double amount = json.getDouble("amount");
             double priceUsd = json.getDouble("priceUsd");
 
             double cryptoAmount, usdAmount;
@@ -53,7 +79,6 @@ public class TradingServlet extends HttpServlet {
 
                 double currentBalance = rs.getDouble("balance");
 
-             
                 if ("buy".equalsIgnoreCase(type) && currentBalance < usdAmount) {
                     out.println("{\"status\":\"fail\", \"message\":\"Insufficient USD balance. You have $" + currentBalance + "\"}");
                     return;
@@ -82,7 +107,6 @@ public class TradingServlet extends HttpServlet {
                     }
                 }
 
-                
                 PreparedStatement insertTxn = conn.prepareStatement(
                     "INSERT INTO transaction (email, crypto_id, crypto_name, amount, crypto_amount, price_usd, type, timestamp) " +
                     "VALUES (?, ?, ?, ?, ?, ?, ?, NOW())"
@@ -96,7 +120,6 @@ public class TradingServlet extends HttpServlet {
                 insertTxn.setString(7, type);
                 insertTxn.executeUpdate();
 
-               
                 double updatedBalance = "buy".equalsIgnoreCase(type)
                     ? currentBalance - usdAmount
                     : currentBalance + usdAmount;
@@ -138,24 +161,19 @@ public class TradingServlet extends HttpServlet {
 
                         remainingCrypto += toKeep;
                         remainingCost += toKeep * price;
-
                     } else if ("sell".equalsIgnoreCase(txnType)) {
                         sellLeft += cryptoAmt;
                     }
                 }
 
-               
+                if (remainingCrypto < 1e-7) {
+                    remainingCrypto = 0;
+                    remainingCost = 0;
+                }
 
-
-if (remainingCrypto < 1e-7) {
-    remainingCrypto = 0;
-    remainingCost = 0;
-}
-
-double avgCost = (remainingCrypto > 0) ? (remainingCost / remainingCrypto) : 0;
-double currentValue = remainingCrypto * priceUsd;
-double unrealizedProfit = currentValue - remainingCost;
-
+                double avgCost = (remainingCrypto > 0) ? (remainingCost / remainingCrypto) : 0;
+                double currentValue = remainingCrypto * priceUsd;
+                double unrealizedProfit = currentValue - remainingCost;
 
                 JSONObject resp = new JSONObject();
                 resp.put("status", "success");

@@ -1,63 +1,81 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/JSP_Servlet/Servlet.java to edit this template
- */
 package com.example.auth;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.stream.Collectors;
+
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.stream.Collectors;
-import org.json.JSONArray;
+
 import org.json.JSONObject;
 
-/**
- *
- * @author HP
- */
+import com.auth0.jwt.JWT;
+import com.auth0.jwt.algorithms.Algorithm;
+import com.auth0.jwt.exceptions.JWTVerificationException;
+import com.auth0.jwt.interfaces.DecodedJWT;
+import com.auth0.jwt.interfaces.JWTVerifier;
+
 @WebServlet("/news")
 public class NewsServlet extends HttpServlet {
     private JSONObject cachedData = new JSONObject();
+    private static final String SECRET = "pk1908seckeyret007";
 
+    private void fetchData() {
+        try {
+            URL url = new URL("https://newsapi.org/v2/everything?q=bitcoin&apiKey=5523b1a9c3cc427fb608eb8dc026df56");
+            HttpURLConnection con = (HttpURLConnection) url.openConnection();
+            con.setRequestMethod("GET");
 
-private void fetchData() {
-    try {
-        URL url = new URL("https://newsapi.org/v2/everything?q=bitcoin&apiKey=5523b1a9c3cc427fb608eb8dc026df56");
-        HttpURLConnection con = (HttpURLConnection) url.openConnection();
-        con.setRequestMethod("GET");
+            BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
+            String response = in.lines().collect(Collectors.joining());
+            in.close();
 
-        BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
-        String response = in.lines().collect(Collectors.joining());
-        in.close();
+            JSONObject result = new JSONObject(response);
+            cachedData = result;
 
-        JSONObject result = new JSONObject(response);
-        System.out.print(result);
-        cachedData = result;
-
-        System.out.println("Crypto news loaded: " + cachedData.length() + " items");
-    } catch (Exception e) {
-        System.out.println("Error fetching crypto news: " + e.getMessage());
+            System.out.println("Crypto news loaded: " + cachedData.length() + " items");
+        } catch (Exception e) {
+            System.out.println("Error fetching crypto news: " + e.getMessage());
+        }
     }
-}
-
 
     @Override
-protected void doGet(HttpServletRequest req, HttpServletResponse res) throws IOException {
-    res.setContentType("application/json");
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    protected void doGet(HttpServletRequest req, HttpServletResponse res) throws IOException {
+        res.setContentType("application/json");
+        res.setHeader("Access-Control-Allow-Origin", "*");
 
-    if (cachedData.length() == 0) {
-        fetchData();
-    }
+     
+        String authHeader = req.getHeader("Authorization");
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            res.getWriter().print("{\"error\":\"Missing or invalid token\"}");
+            return;
+        }
+
+        String token = authHeader.substring("Bearer ".length());
+        try {
+            Algorithm algorithm = Algorithm.HMAC256(SECRET);
+            JWTVerifier verifier = JWT.require(algorithm).build();
+            DecodedJWT jwt = verifier.verify(token);
+           
+        } catch (JWTVerificationException e) {
+            res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            res.getWriter().print("{\"error\":\"Invalid token\"}");
+            return;
+        }
+
+        
+        if (cachedData.length() == 0) {
+            fetchData();
+        }
+
         res.getWriter().print(cachedData.toString());
-    
-}
+    }
 }

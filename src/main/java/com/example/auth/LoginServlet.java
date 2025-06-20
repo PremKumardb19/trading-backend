@@ -6,9 +6,16 @@ import jakarta.servlet.annotation.*;
 import java.io.*;
 import java.security.MessageDigest;
 import java.sql.*;
-import org.json.JSONObject;
+import java.util.Date;
+
+import com.auth0.jwt.JWT;
+import com.auth0.jwt.algorithms.Algorithm;
+
 @WebServlet("/login")
 public class LoginServlet extends HttpServlet {
+
+    private static final String SECRET_KEY = "pk1908seckeyret007";
+    private static final long EXPIRATION_TIME = 86400000; 
 
     private String hashPassword(String password) throws Exception {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -20,6 +27,16 @@ public class LoginServlet extends HttpServlet {
         return sb.toString();
     }
 
+    private String generateToken(String username, String email) {
+        return JWT.create()
+            .withSubject(username)
+            .withClaim("email", email)
+            .withIssuedAt(new Date())
+            .withExpiresAt(new Date(System.currentTimeMillis() + EXPIRATION_TIME))
+            .sign(Algorithm.HMAC256(SECRET_KEY));
+    }
+
+    @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
         throws ServletException, IOException {
 
@@ -41,7 +58,13 @@ public class LoginServlet extends HttpServlet {
 
             if (rs.next()) {
                 String email = rs.getString("email");
-                out.println("{\"status\":\"success\", \"email\":\"" + email + "\"}");
+                String token = generateToken(username, email);
+
+                out.println("{");
+                out.println("\"status\":\"success\",");
+                out.println("\"email\":\"" + email + "\",");
+                out.println("\"token\":\"" + token + "\"");
+                out.println("}");
             } else {
                 out.println("{\"status\":\"failed\"}");
             }
