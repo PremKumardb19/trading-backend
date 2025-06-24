@@ -1,4 +1,6 @@
 D:\OneDrive\Documents\NetBeansProjects\trading-backend\src\main\java\com\example\auth\AllCryptoServlet.java
+D:\OneDrive\Documents\NetBeansProjects\trading-backend\src\main\java\com\example\auth\AuthFilter.java
+D:\OneDrive\Documents\NetBeansProjects\trading-backend\src\main\java\com\example\auth\AuthUtils.java
 D:\OneDrive\Documents\NetBeansProjects\trading-backend\src\main\java\com\example\auth\BalanceServlet.java
 D:\OneDrive\Documents\NetBeansProjects\trading-backend\src\main\java\com\example\auth\CandleServlet.java
 D:\OneDrive\Documents\NetBeansProjects\trading-backend\src\main\java\com\example\auth\ConverterServlet.java
@@ -7,6 +9,7 @@ D:\OneDrive\Documents\NetBeansProjects\trading-backend\src\main\java\com\example
 D:\OneDrive\Documents\NetBeansProjects\trading-backend\src\main\java\com\example\auth\FetchServlet.java
 D:\OneDrive\Documents\NetBeansProjects\trading-backend\src\main\java\com\example\auth\FundingServlet.java
 D:\OneDrive\Documents\NetBeansProjects\trading-backend\src\main\java\com\example\auth\HoldingServlet.java
+D:\OneDrive\Documents\NetBeansProjects\trading-backend\src\main\java\com\example\auth\JWTUtil.java
 D:\OneDrive\Documents\NetBeansProjects\trading-backend\src\main\java\com\example\auth\LoginServlet.java
 D:\OneDrive\Documents\NetBeansProjects\trading-backend\src\main\java\com\example\auth\NewsServlet.java
 D:\OneDrive\Documents\NetBeansProjects\trading-backend\src\main\java\com\example\auth\RegisterServlet.java

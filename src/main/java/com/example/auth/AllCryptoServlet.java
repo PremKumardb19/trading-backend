@@ -7,35 +7,15 @@ import jakarta.servlet.*;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.*;
 import org.json.*;
-import com.auth0.jwt.JWT;
-import com.auth0.jwt.algorithms.Algorithm;
-import com.auth0.jwt.interfaces.DecodedJWT;
-import com.auth0.jwt.interfaces.JWTVerifier;
-import com.auth0.jwt.exceptions.JWTVerificationException;
 
 @WebServlet("/all-crypto")
 public class AllCryptoServlet extends HttpServlet {
-    private static final String SECRET = "pk1908seckeyret007"; 
-    private JSONArray cachedData = new JSONArray();
 
-    @Override
-    public void init() {
-        fetchData();
-        new Thread(() -> {
-            while (true) {
-                try {
-                    fetchData();
-                    Thread.sleep(10000);
-                } catch (Exception e) {
-                    System.out.println("Error polling all crypto: " + e.getMessage());
-                }
-            }
-        }).start();
-    }
+    private JSONArray cachedData = new JSONArray();
 
     private void fetchData() {
         try {
-            URL url = new URL("https://rest.coincap.io/v3/assets?apiKey=8e4c0ae84aef54f52a86dad8d34ca8a834b11bcf6c7a052743494933b8d92bed");
+            URL url = new URL("https://rest.coincap.io/v3/assets?apiKey=9e50a78ca713d6c487bc1002690242f896b135296981b612c63350fa6547f6ca");
             HttpURLConnection con = (HttpURLConnection) url.openConnection();
             con.setRequestMethod("GET");
 
@@ -55,33 +35,16 @@ public class AllCryptoServlet extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse res) throws IOException {
         res.setContentType("application/json");
-        res.setHeader("Access-Control-Allow-Origin", "*");
+        String emailFromToken = (String) req.getAttribute("tokenEmail");
 
-   
-        String authHeader = req.getHeader("Authorization");
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        if (emailFromToken == null) {
             res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            res.getWriter().print("{\"status\":\"unauthorized\",\"message\":\"Token missing\"}");
+            res.getWriter().print("{\"status\":\"unauthorized\",\"message\":\"Unauthorized access\"}");
             return;
         }
 
-        String token = authHeader.substring("Bearer ".length());
-
-        try {
-            Algorithm algorithm = Algorithm.HMAC256(SECRET);
-            JWTVerifier verifier = JWT.require(algorithm).build();
-            DecodedJWT jwt = verifier.verify(token);
-
-          
-            if (cachedData.length() == 0) {
-                res.getWriter().print("{\"status\":\"loading\"}");
-            } else {
-                res.getWriter().print(cachedData);
-            }
-
-        } catch (JWTVerificationException e) {
-            res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            res.getWriter().print("{\"status\":\"unauthorized\",\"message\":\"Invalid token\"}");
-        }
+        
+        fetchData();
+        res.getWriter().print(cachedData);
     }
 }

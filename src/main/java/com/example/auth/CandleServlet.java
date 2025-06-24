@@ -3,12 +3,9 @@ package com.example.auth;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.PrintWriter;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Map;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 import jakarta.servlet.ServletException;
@@ -19,22 +16,10 @@ import jakarta.servlet.http.HttpServletResponse;
 
 import org.json.JSONArray;
 
-import com.auth0.jwt.JWT;
-import com.auth0.jwt.algorithms.Algorithm;
-import com.auth0.jwt.exceptions.JWTVerificationException;
-import com.auth0.jwt.interfaces.DecodedJWT;
-import com.auth0.jwt.interfaces.JWTVerifier;
-
 @WebServlet("/candles")
 public class CandleServlet extends HttpServlet {
 
     private static final String SECRET = "pk1908seckeyret007";
-    private String response = "";
-    private String baseId = "bitcoin";
-    private String quoteId = "tether";
-    private String binanceSymbol = "";
-    private int status = 0;
-
     private static final Map<String, String> symbolMap = Map.ofEntries(
         Map.entry("bitcoin", "BTC"), Map.entry("ethereum", "ETH"), Map.entry("tether", "USDT"),
         Map.entry("xrp", "XRP"), Map.entry("bnb", "BNB"), Map.entry("solana", "SOL"),
@@ -53,48 +38,31 @@ public class CandleServlet extends HttpServlet {
         Map.entry("dai", "DAI")
     );
 
-    @Override
-    public void init() {
-        binanceSymbol = convertToBinanceSymbol(baseId, quoteId);
-        try {
-            fetchData();
-        } catch (IOException ex) {
-            Logger.getLogger(CandleServlet.class.getName()).log(Level.SEVERE, null, ex);
-        }
-        startPollingThread();
+    private String convertToBinanceSymbol(String baseId, String quoteId) {
+        String baseSymbol = symbolMap.getOrDefault(baseId.toLowerCase(), baseId.toUpperCase());
+        String quoteSymbol = symbolMap.getOrDefault(quoteId.toLowerCase(), quoteId.toUpperCase());
+        return baseSymbol + quoteSymbol;
     }
 
-    private void startPollingThread() {
-        new Thread(() -> {
-            while (true) {
-                try {
-                    fetchData();
-                    Thread.sleep(2000);
-                } catch (Exception e) {
-                    System.out.println("Error polling Binance data: " + e.getMessage());
-                }
-            }
-        }).start();
-    }
-
-    public void fetchData() throws IOException {
-        binanceSymbol = convertToBinanceSymbol(baseId, quoteId);
-        System.out.println("at fetchData "+ baseId+" quoteId"+quoteId);
+    private String fetchData(String baseId, String quoteId) throws IOException {
+        String binanceSymbol = convertToBinanceSymbol(baseId, quoteId);
         String apiUrl = "https://api.binance.com/api/v3/klines?symbol=" + binanceSymbol + "&interval=1m";
 
         HttpURLConnection con = (HttpURLConnection) new URL(apiUrl).openConnection();
         con.setRequestMethod("GET");
-        status = con.getResponseCode();
+        int status = con.getResponseCode();
+        String result;
 
         if (status == 200) {
             try (BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()))) {
-                response = in.lines().collect(Collectors.joining());
+                result = in.lines().collect(Collectors.joining());
             }
         } else {
-            response = "[]";
+            result = "[]";
         }
 
         con.disconnect();
+        return result;
     }
 
     @Override
@@ -103,41 +71,28 @@ public class CandleServlet extends HttpServlet {
         res.setHeader("Access-Control-Allow-Origin", "*");
 
         
-        String authHeader = req.getHeader("Authorization");
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            res.getWriter().print("{\"error\":\"Missing or invalid token\"}");
+        String email = (String) req.getAttribute("tokenEmail");
+        if (email == null || email.isEmpty()) {
+            res.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            res.getWriter().print("{\"error\":\"Forbidden: Invalid or missing token email.\"}");
             return;
         }
 
-        String token = authHeader.substring("Bearer ".length());
+        String baseId = req.getParameter("baseId");
+        String quoteId = req.getParameter("quoteId");
+
+        if (baseId == null || quoteId == null) {
+            res.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            res.getWriter().print("{\"error\":\"Missing baseId or quoteId in request\"}");
+            return;
+        }
 
         try {
-            Algorithm algorithm = Algorithm.HMAC256(SECRET);
-            JWTVerifier verifier = JWT.require(algorithm).build();
-            DecodedJWT jwt = verifier.verify(token);
-        } catch (JWTVerificationException e) {
-            res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            res.getWriter().print("{\"error\":\"Invalid token\"}");
-            return;
+            String data = fetchData(baseId, quoteId);
+            res.getWriter().print(new JSONArray(data));
+        } catch (Exception e) {
+            res.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            res.getWriter().print("{\"error\":\"Failed to fetch candle data\"}");
         }
-
-        
-        String newBase = req.getParameter("baseId");
-        String newQuote = req.getParameter("quoteId");
-
-        if (newBase != null && newQuote != null) {
-            baseId = newBase;
-            quoteId = newQuote;
-            fetchData();
-        }
-
-        res.getWriter().print(new JSONArray(response));
-    }
-
-    private String convertToBinanceSymbol(String baseId, String quoteId) {
-        String baseSymbol = symbolMap.getOrDefault(baseId.toLowerCase(), baseId.toUpperCase());
-        String quoteSymbol = symbolMap.getOrDefault(quoteId.toLowerCase(), quoteId.toUpperCase());
-        return baseSymbol + quoteSymbol;
     }
 }

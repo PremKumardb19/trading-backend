@@ -6,37 +6,20 @@ import jakarta.servlet.annotation.*;
 import java.io.*;
 import java.sql.*;
 import org.json.JSONObject;
-import com.auth0.jwt.JWT;
-import com.auth0.jwt.algorithms.Algorithm;
-import com.auth0.jwt.exceptions.JWTVerificationException;
-import com.auth0.jwt.interfaces.DecodedJWT;
-import com.auth0.jwt.interfaces.JWTVerifier;
 
 @WebServlet("/trade")
 public class TradingServlet extends HttpServlet {
-    private static final String SECRET = "pk1908seckeyret007";
 
+    @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
         response.setContentType("application/json");
         PrintWriter out = response.getWriter();
 
-        String authHeader = request.getHeader("Authorization");
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            out.println("{\"status\":\"fail\", \"message\":\"Missing or invalid token\"}");
-            return;
-        }
+        String email = (String) request.getAttribute("tokenEmail");
 
-        String token = authHeader.substring("Bearer ".length());
-        String email;
-        try {
-            Algorithm algorithm = Algorithm.HMAC256(SECRET);
-            JWTVerifier verifier = JWT.require(algorithm).build();
-            DecodedJWT jwt = verifier.verify(token);
-            email = jwt.getClaim("email").asString(); 
-        } catch (JWTVerificationException e) {
+        if (email == null) {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            out.println("{\"status\":\"fail\", \"message\":\"Invalid token\"}");
+            out.println("{\"status\":\"fail\", \"message\":\"Unauthorized: missing user info\"}");
             return;
         }
 
@@ -49,20 +32,20 @@ public class TradingServlet extends HttpServlet {
             }
             JSONObject json = new JSONObject(sb.toString());
 
-            String cryptoId = json.getString("cryptoId");
-            String cryptoName = json.getString("cryptoName");
-            String type = json.getString("type");
-            double amount = json.getDouble("amount");
-            double priceUsd = json.getDouble("priceUsd");
+            String cryptoId = json.optString("cryptoId", null);
+            String cryptoName = json.optString("cryptoName", null);
+            String type = json.optString("type", null);
+            double amount = json.optDouble("amount", -1);
+            double priceUsd = json.optDouble("priceUsd", -1);
 
-            double cryptoAmount, usdAmount;
-            if ("buy".equalsIgnoreCase(type)) {
-                usdAmount = amount;
-                cryptoAmount = usdAmount / priceUsd;
-            } else if ("sell".equalsIgnoreCase(type)) {
-                cryptoAmount = amount;
-                usdAmount = cryptoAmount * priceUsd;
-            } else {
+            if (cryptoId == null || cryptoName == null || type == null || amount <= 0 || priceUsd <= 0) {
+                response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                out.println("{\"status\":\"fail\", \"message\":\"Missing or invalid parameters\"}");
+                return;
+            }
+
+            if (!("buy".equalsIgnoreCase(type) || "sell".equalsIgnoreCase(type))) {
+                response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
                 out.println("{\"status\":\"fail\", \"message\":\"Invalid trade type\"}");
                 return;
             }
@@ -73,18 +56,25 @@ public class TradingServlet extends HttpServlet {
                 ResultSet rs = checkUser.executeQuery();
 
                 if (!rs.next()) {
+                    response.setStatus(HttpServletResponse.SC_NOT_FOUND);
                     out.println("{\"status\":\"fail\", \"message\": \"User not found\"}");
                     return;
                 }
 
                 double currentBalance = rs.getDouble("balance");
 
-                if ("buy".equalsIgnoreCase(type) && currentBalance < usdAmount) {
-                    out.println("{\"status\":\"fail\", \"message\":\"Insufficient USD balance. You have $" + currentBalance + "\"}");
-                    return;
-                }
-
-                if ("sell".equalsIgnoreCase(type)) {
+                double cryptoAmount, usdAmount;
+                if ("buy".equalsIgnoreCase(type)) {
+                    usdAmount = amount;
+                    cryptoAmount = usdAmount / priceUsd;
+                    if (currentBalance < usdAmount) {
+                        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                        out.println("{\"status\":\"fail\", \"message\":\"Insufficient USD balance. You have $" + currentBalance + "\"}");
+                        return;
+                    }
+                } else { 
+                    cryptoAmount = amount;
+                    usdAmount = cryptoAmount * priceUsd;
                     PreparedStatement holdingStmt = conn.prepareStatement(
                         "SELECT type, crypto_amount FROM transaction WHERE email = ? AND crypto_id = ?"
                     );
@@ -97,11 +87,12 @@ public class TradingServlet extends HttpServlet {
                         String txnType = holdRs.getString("type");
                         double amt = holdRs.getDouble("crypto_amount");
                         if ("buy".equalsIgnoreCase(txnType)) totalBuy += amt;
-                        if ("sell".equalsIgnoreCase(txnType)) totalSell += amt;
+                        else if ("sell".equalsIgnoreCase(txnType)) totalSell += amt;
                     }
 
                     double currentHoldings = totalBuy - totalSell;
                     if (currentHoldings < cryptoAmount) {
+                        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
                         out.println("{\"status\":\"fail\", \"message\":\"Insufficient crypto holdings. You have " + currentHoldings + "\"}");
                         return;
                     }
@@ -120,6 +111,7 @@ public class TradingServlet extends HttpServlet {
                 insertTxn.setString(7, type);
                 insertTxn.executeUpdate();
 
+           
                 double updatedBalance = "buy".equalsIgnoreCase(type)
                     ? currentBalance - usdAmount
                     : currentBalance + usdAmount;
@@ -185,12 +177,13 @@ public class TradingServlet extends HttpServlet {
                 resp.put("currentValue", String.format("%.2f", currentValue));
                 resp.put("unrealizedProfit", String.format("%.2f", unrealizedProfit));
 
-                out.println(resp.toString());
+                response.setStatus(HttpServletResponse.SC_OK);
+                out.println(resp);
             }
 
         } catch (Exception e) {
             e.printStackTrace();
-            response.setStatus(500);
+            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             out.println("{\"status\":\"fail\", \"message\":\"" + e.getMessage().replace("\"", "'") + "\"}");
         }
     }

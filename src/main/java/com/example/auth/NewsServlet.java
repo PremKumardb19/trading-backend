@@ -49,29 +49,6 @@ public class NewsServlet extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse res) throws IOException {
         res.setContentType("application/json");
-        res.setHeader("Access-Control-Allow-Origin", "*");
-
-     
-        String authHeader = req.getHeader("Authorization");
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            res.getWriter().print("{\"error\":\"Missing or invalid token\"}");
-            return;
-        }
-
-        String token = authHeader.substring("Bearer ".length());
-        try {
-            Algorithm algorithm = Algorithm.HMAC256(SECRET);
-            JWTVerifier verifier = JWT.require(algorithm).build();
-            DecodedJWT jwt = verifier.verify(token);
-           
-        } catch (JWTVerificationException e) {
-            res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            res.getWriter().print("{\"error\":\"Invalid token\"}");
-            return;
-        }
-
-        
         if (cachedData.length() == 0) {
             fetchData();
         }

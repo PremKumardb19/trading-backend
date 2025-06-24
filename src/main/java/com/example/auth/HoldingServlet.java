@@ -7,62 +7,32 @@ import java.io.*;
 import java.sql.*;
 import org.json.JSONObject;
 
-import com.auth0.jwt.JWT;
-import com.auth0.jwt.algorithms.Algorithm;
-import com.auth0.jwt.exceptions.JWTVerificationException;
-import com.auth0.jwt.interfaces.DecodedJWT;
-import com.auth0.jwt.interfaces.JWTVerifier;
-
 @WebServlet("/holdings")
 public class HoldingServlet extends HttpServlet {
-
-    private static final String SECRET = "pk1908seckeyret007";
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse res) throws IOException {
         res.setContentType("application/json");
         PrintWriter out = res.getWriter();
 
-      
-        String authHeader = req.getHeader("Authorization");
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            out.print("{\"error\":\"Missing or invalid token\"}");
-            return;
-        }
-
-        String token = authHeader.substring("Bearer ".length());
-        String tokenEmail;
-
-        try {
-            Algorithm algorithm = Algorithm.HMAC256(SECRET);
-            JWTVerifier verifier = JWT.require(algorithm).build();
-            DecodedJWT jwt = verifier.verify(token);
-            tokenEmail = jwt.getClaim("email").asString();
-        } catch (JWTVerificationException e) {
-            res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            out.print("{\"error\":\"Invalid token\"}");
-            return;
-        }
-
         
-        String email = req.getParameter("email");
+        String email = (String) req.getAttribute("tokenEmail");
+
+        if (email == null) {
+            res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            out.print("{\"error\":\"Unauthorized access\"}");
+            return;
+        }
+
         String cryptoId = req.getParameter("cryptoId");
         String priceUsdStr = req.getParameter("priceUsd");
 
-        if (email == null || cryptoId == null || priceUsdStr == null) {
+        if (cryptoId == null || priceUsdStr == null) {
             res.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-            out.print("{\"error\":\"Missing parameters: email, cryptoId, priceUsd required\"}");
+            out.print("{\"error\":\"Missing required parameters: cryptoId and priceUsd\"}");
             return;
         }
 
-        if (!email.equals(tokenEmail)) {
-            res.setStatus(HttpServletResponse.SC_FORBIDDEN);
-            out.print("{\"error\":\"Email mismatch between token and request\"}");
-            return;
-        }
-
-        
         try (Connection conn = DBConnection.getConnection()) {
             double currentPrice = Double.parseDouble(priceUsdStr);
             double totalCryptoBuy = 0;
@@ -108,8 +78,12 @@ public class HoldingServlet extends HttpServlet {
             json.put("currentValue", currentValue);
             json.put("profitOrLoss", totalProfitOrLoss);
 
-            out.print(json.toString());
+            res.setStatus(HttpServletResponse.SC_OK);
+            out.print(json);
 
+        } catch (NumberFormatException e) {
+            res.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            out.print("{\"error\":\"Invalid price format\"}");
         } catch (Exception e) {
             e.printStackTrace();
             res.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
