@@ -17,19 +17,18 @@ public class AuthFilter implements Filter {
         HttpServletRequest req = (HttpServletRequest) request;
         HttpServletResponse res = (HttpServletResponse) response;
 
-        setCorsHeaders(res); // Set CORS headers always
-
+        setCorsHeaders(res); 
         String path = req.getRequestURI();
         String method = req.getMethod();
 
 
         if (method.equalsIgnoreCase("OPTIONS")) {
-            res.setStatus(HttpServletResponse.SC_OK); // Only for preflight
+            res.setStatus(HttpServletResponse.SC_OK); 
             return;
         }
 
         if (path.contains("/auth")) {
-            chain.doFilter(request, response); // Let login/register happen
+            chain.doFilter(request, response);
             return;
         }
 
@@ -43,12 +42,17 @@ public class AuthFilter implements Filter {
             if (emailFromRequest == null || !emailFromRequest.equalsIgnoreCase(emailFromToken)) {
                 res.setStatus(HttpServletResponse.SC_FORBIDDEN);
                 res.setContentType("application/json");
+                System.out.println("path"+path);
+                System.out.println("emailFromTOken"+emailFromToken);
+                System.out.println("emailfromrequest"+emailFromRequest);
+                
+                  
                 res.getWriter().write("{\"error\":\"Email in request does not match token\"}");
                 return;
             }
 
             req.setAttribute("tokenEmail", emailFromToken);
-            chain.doFilter(request, response); // Continue to servlet
+            chain.doFilter(request, response);
 
         } catch (Exception e) {
             res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);

@@ -33,12 +33,6 @@ public class AuthUtils {
             .sign(Algorithm.HMAC256(SECRET_KEY));
     }
 
-//    public static String verifyTokenAndGetEmail(String token) throws Exception {
-//        Algorithm algorithm = Algorithm.HMAC256(SECRET_KEY);
-//        JWTVerifier verifier = JWT.require(algorithm).build();
-//        DecodedJWT jwt = verifier.verify(token);
-//        return jwt.getClaim("email").asString();
-//    }
      public static String verifyTokenAndGetEmail(String authHeader) throws JWTVerificationException {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             throw new JWTVerificationException("Missing or invalid Authorization header");
@@ -50,10 +44,9 @@ public class AuthUtils {
         JWTVerifier verifier = JWT.require(algorithm).build();
         DecodedJWT jwt = verifier.verify(token);
         String email = jwt.getClaim("email").asString();
-        System.out.println(jwt);
         if (email == null || email.isEmpty()) {
             throw new JWTVerificationException("Email not found in token");
-        }
+        }   
 
         return email;
     }

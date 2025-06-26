@@ -6,6 +6,8 @@ import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.*;
 import java.io.*;
 import java.sql.*;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.json.JSONObject;
 
 @WebServlet("/wallet")
@@ -39,9 +41,12 @@ public class WalletServlet extends HttpServlet {
                 case "holdings":
                     handleHoldings(email, req, res, out);
                     break;
+                case "info":
+                    handleCryptoInfo(req, res, out);
+                    break;
                 default:
                     res.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-                    out.print("{\"error\":\"Invalid action for GET. Use 'balance' or 'holdings'\"}");
+                    out.print("{\"error\":\"Invalid action for GET. Use 'balance' or 'holdings' or 'info' \"}");
             }
         } catch (Exception e) {
             res.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
@@ -191,4 +196,59 @@ public class WalletServlet extends HttpServlet {
             out.print("{\"error\":\"Invalid amount format\"}");
         }
     }
+    
+    private void handleCryptoInfo(HttpServletRequest req, HttpServletResponse res, PrintWriter out) throws IOException {
+    String cryptoId = req.getParameter("cryptoId");
+    String priceUsdStr = req.getParameter("priceUsd");
+
+    if (cryptoId == null || priceUsdStr == null) {
+        res.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+        out.print("{\"error\":\"Missing cryptoId or priceUsd\"}");
+        return;
+    }
+
+    try (Connection conn = DBConnection.getConnection()) {
+        double priceUsd = Double.parseDouble(priceUsdStr);
+
+        String sql = "SELECT market_cap, sold_crypto_amount FROM crypto_inventory WHERE crypto_id = ?";
+        PreparedStatement stmt = conn.prepareStatement(sql);
+        stmt.setString(1, cryptoId);
+        ResultSet rs = stmt.executeQuery();
+
+        if (rs.next()) {
+            double marketCap = rs.getDouble("market_cap");
+            double soldAmount = rs.getDouble("sold_crypto_amount");
+            System.out.println("Marketcap and soldamount");
+            System.out.println(marketCap);
+            System.out.println(soldAmount);
+            double remaining = marketCap - soldAmount;
+            System.out.println("remaining is");
+            System.out.println(remaining);
+            if (remaining < 0) remaining = 0;
+            double usdRequired = remaining * priceUsd;
+
+            JSONObject json = new JSONObject();
+            json.put("cryptoId", cryptoId);
+            json.put("marketCap", marketCap);
+            json.put("soldCryptoAmount", soldAmount);
+            json.put("remainingSupply", remaining);
+            json.put("usdRequiredToBuyRemaining", usdRequired);
+
+            res.setStatus(HttpServletResponse.SC_OK);
+            out.print(json);
+        } else {
+            res.setStatus(HttpServletResponse.SC_NOT_FOUND);
+            out.print("{\"error\":\"Crypto not found in supply table\"}");
+        }
+    } catch (NumberFormatException e) {
+        res.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+        out.print("{\"error\":\"Invalid priceUsd format\"}");
+    } catch (SQLException e) {
+        res.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+        out.print("{\"error\":\"" + e.getMessage().replace("\"", "'") + "\"}");
+    }   catch (Exception ex) {
+            Logger.getLogger(WalletServlet.class.getName()).log(Level.SEVERE, null, ex);
+        }
+}
+
 }

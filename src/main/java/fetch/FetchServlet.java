@@ -7,6 +7,10 @@ import java.util.stream.Collectors;
 import jakarta.servlet.*;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.*;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import org.json.*;
 
 @WebServlet("/fetch")
@@ -33,24 +37,57 @@ public class FetchServlet extends HttpServlet {
         Map.entry("dai", "DAI")
     );
 
-    private void fetchCryptoData() {
-        try {
-            URL url = new URL("https://rest.coincap.io/v3/assets?apiKey=d9df3ae3128b6a847b49a7ea2cfb248430f28fe9fd3986057924f51b226c57f2");
-            HttpURLConnection con = (HttpURLConnection) url.openConnection();
-            con.setRequestMethod("GET");
+private void fetchCryptoData() {
+    try {
+        URL url = new URL("https://rest.coincap.io/v3/assets?apiKey=cefa6b278c6cc4c49854b0f350218585c6e811f92e8737315b0c1461212aa651");
+        HttpURLConnection con = (HttpURLConnection) url.openConnection();
+        con.setRequestMethod("GET");
 
-            BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
-            String response = in.lines().collect(Collectors.joining());
-            in.close();
+        BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
+        String response = in.lines().collect(Collectors.joining());
+        in.close();
 
-            JSONObject result = new JSONObject(response);
-            cryptoCache = result.getJSONArray("data");
+        JSONObject result = new JSONObject(response);
+        cryptoCache = result.getJSONArray("data");
 
-            System.out.println("Crypto data loaded: " + cryptoCache.length() + " items");
-        } catch (Exception e) {
-            System.out.println("Error fetching crypto data: " + e.getMessage());
+        System.out.println("Crypto data loaded: " + cryptoCache.length() + " items");
+
+        try (Connection conn = db.DBConnection.getConnection()) {
+            Statement checkStmt = conn.createStatement();
+            ResultSet rs = checkStmt.executeQuery("SELECT COUNT(*) AS count FROM crypto_inventory");
+            rs.next();
+            int count = rs.getInt("count");
+
+            if (count == 0) {
+                String sql = "INSERT INTO crypto_inventory (crypto_id, sold_crypto_amount, market_cap) VALUES (?, 0, ?)";
+                PreparedStatement pstmt = conn.prepareStatement(sql);
+
+                for (int i = 0; i < cryptoCache.length(); i++) {
+                    JSONObject obj = cryptoCache.getJSONObject(i);
+                    String id = obj.getString("id");
+                    double marketCap = obj.optDouble("marketCapUsd", 0);
+
+                    if (marketCap > 0) {
+                        pstmt.setString(1, id);
+                        pstmt.setDouble(2, marketCap);
+                        pstmt.addBatch();
+                    }
+                }
+
+                pstmt.executeBatch();
+                System.out.println("Inserted initial crypto_inventory entries.");
+            } else {
+                System.out.println("crypto_inventory already populated.");
+            }
+        } catch (Exception dbEx) {
+            System.out.println("DB insert error: " + dbEx.getMessage());
         }
+
+    } catch (Exception e) {
+        System.out.println("Error fetching crypto data: " + e.getMessage());
     }
+}
+
 
     private void fetchNewsData() {
         try {
